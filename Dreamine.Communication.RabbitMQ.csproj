@@ -28,6 +28,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <PackageReference Include="RabbitMQ.Client" />
+	</ItemGroup>
+
+	<ItemGroup>
 	  <ProjectReference Include="..\Communication.Abstractions\Dreamine.Communication.Abstractions.csproj" />
 	</ItemGroup>
 
