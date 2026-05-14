@@ -4,7 +4,7 @@
 
 이 패키지는 Dreamine Communication의 공통 메시지 계약인 `MessageEnvelope`를 RabbitMQ의 Exchange, Queue, RoutingKey 기반 Publish/Subscribe 메시징 구조와 연결하는 `IMessageBus` 구현체를 제공합니다.
 
-[➡️ View English document](README.md)
+[➡️ English Version](./README.md)
 
 ## 설명
 
@@ -194,7 +194,7 @@ Connect
 - `Dreamine.Communication.Abstractions`
 - `RabbitMQ.Client`
 
-## Third-party License Notice
+## 외부 라이선스 안내
 
 이 패키지는 `RabbitMQ.Client`를 사용합니다.
 

@@ -4,7 +4,7 @@
 
 This package provides a RabbitMQ-based `IMessageBus` implementation for Dreamine Communication. It connects the common Dreamine message contract, `MessageEnvelope`, to RabbitMQ exchange, queue, and routing key based publish/subscribe messaging.
 
-[➡️ 한국어 문서 보기](README_KO.md)
+[➡️ 한국어 문서 보기](./README_KO.md)
 
 ## Description
 
