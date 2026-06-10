@@ -2,9 +2,8 @@
 using Dreamine.Communication.Abstractions.Enums;
 using Dreamine.Communication.Abstractions.Interfaces;
 using Dreamine.Communication.Abstractions.Models;
+using Dreamine.Communication.RabbitMQ.Infrastructure;
 using Dreamine.Communication.RabbitMQ.Options;
-using RabbitMQ.Client;
-using RabbitMQ.Client.Events;
 
 namespace Dreamine.Communication.RabbitMQ.Buses;
 
@@ -18,11 +17,12 @@ namespace Dreamine.Communication.RabbitMQ.Buses;
 public sealed class RabbitMqMessageBus : IMessageBus
 {
     private readonly RabbitMqMessageBusOptions _options;
+    private readonly IRabbitMqConnectionFactory _connectionFactory;
     private readonly Dictionary<string, Func<MessageEnvelope, CancellationToken, Task>> _handlers = new();
     private readonly object _syncRoot = new();
 
-    private IConnection? _connection;
-    private IModel? _channel;
+    private IRabbitMqConnection? _connection;
+    private IRabbitMqChannel? _channel;
     private string? _consumerTag;
 
     /// <summary>
@@ -30,8 +30,21 @@ public sealed class RabbitMqMessageBus : IMessageBus
     /// </summary>
     /// <param name="options">RabbitMQ 메시지 버스 설정입니다.</param>
     public RabbitMqMessageBus(RabbitMqMessageBusOptions options)
+        : this(options, new RabbitMqClientConnectionFactory())
+    {
+    }
+
+    /// <summary>
+    /// \brief RabbitMqMessageBus 클래스의 새 인스턴스를 초기화합니다.
+    /// </summary>
+    /// <param name="options">RabbitMQ 메시지 버스 설정입니다.</param>
+    /// <param name="connectionFactory">RabbitMQ 연결 팩토리입니다.</param>
+    public RabbitMqMessageBus(
+        RabbitMqMessageBusOptions options,
+        IRabbitMqConnectionFactory connectionFactory)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
         ValidateOptions(_options);
     }
 
@@ -62,18 +75,8 @@ public sealed class RabbitMqMessageBus : IMessageBus
 
         try
         {
-            var factory = new ConnectionFactory
-            {
-                HostName = _options.HostName,
-                Port = _options.Port,
-                VirtualHost = _options.VirtualHost,
-                UserName = _options.UserName,
-                Password = _options.Password,
-                DispatchConsumersAsync = true
-            };
-
-            _connection = factory.CreateConnection();
-            _channel = _connection.CreateModel();
+            _connection = _connectionFactory.CreateConnection(_options);
+            _channel = _connection.CreateChannel();
 
             DeclareTopology(_channel);
 
@@ -112,7 +115,7 @@ public sealed class RabbitMqMessageBus : IMessageBus
         var body = JsonSerializer.SerializeToUtf8Bytes(message);
 
         var properties = _channel.CreateBasicProperties();
-        properties.Persistent = false;
+        properties.Persistent = _options.PersistentMessages;
         properties.ContentType = "application/json";
         properties.Type = nameof(MessageEnvelope);
 
@@ -120,7 +123,7 @@ public sealed class RabbitMqMessageBus : IMessageBus
             exchange: _options.ExchangeName,
             routingKey: route,
             mandatory: false,
-            basicProperties: properties,
+            properties: properties,
             body: body);
 
         return Task.CompletedTask;
@@ -161,17 +164,12 @@ public sealed class RabbitMqMessageBus : IMessageBus
             return Task.CompletedTask;
         }
 
-        var consumer = new AsyncEventingBasicConsumer(_channel);
-
-        consumer.Received += async (_, args) =>
-        {
-            await HandleReceivedAsync(args, cancellationToken).ConfigureAwait(false);
-        };
-
         _consumerTag = _channel.BasicConsume(
             queue: _options.QueueName,
             autoAck: false,
-            consumer: consumer);
+            onReceived: (delivery, token) => HandleReceivedAsync(
+                delivery,
+                token.CanBeCanceled ? token : cancellationToken));
 
         return Task.CompletedTask;
     }
@@ -208,7 +206,7 @@ public sealed class RabbitMqMessageBus : IMessageBus
     }
 
     private async Task HandleReceivedAsync(
-        BasicDeliverEventArgs args,
+        RabbitMqDelivery delivery,
         CancellationToken cancellationToken)
     {
         if (_channel is null)
@@ -218,16 +216,16 @@ public sealed class RabbitMqMessageBus : IMessageBus
 
         try
         {
-            var message = JsonSerializer.Deserialize<MessageEnvelope>(args.Body.Span);
+            var message = JsonSerializer.Deserialize<MessageEnvelope>(delivery.Body.Span);
 
             if (message is null)
             {
-                _channel.BasicReject(args.DeliveryTag, requeue: false);
+                _channel.BasicReject(delivery.DeliveryTag, requeue: false);
                 return;
             }
 
             var route = string.IsNullOrWhiteSpace(message.Route)
-                ? args.RoutingKey
+                ? delivery.RoutingKey
                 : message.Route;
 
             Func<MessageEnvelope, CancellationToken, Task>? handler;
@@ -235,7 +233,7 @@ public sealed class RabbitMqMessageBus : IMessageBus
             lock (_syncRoot)
             {
                 if (!_handlers.TryGetValue(route, out handler) &&
-                    !_handlers.TryGetValue(args.RoutingKey, out handler))
+                    !_handlers.TryGetValue(delivery.RoutingKey, out handler))
                 {
                     handler = null;
                 }
@@ -243,19 +241,22 @@ public sealed class RabbitMqMessageBus : IMessageBus
 
             if (handler is null)
             {
-                _channel.BasicAck(args.DeliveryTag, multiple: false);
+                _channel.BasicAck(delivery.DeliveryTag, multiple: false);
                 return;
             }
 
             await handler(message, cancellationToken).ConfigureAwait(false);
 
-            _channel.BasicAck(args.DeliveryTag, multiple: false);
+            _channel.BasicAck(delivery.DeliveryTag, multiple: false);
         }
         catch
         {
             try
             {
-                _channel.BasicNack(args.DeliveryTag, multiple: false, requeue: false);
+                _channel.BasicNack(
+                    delivery.DeliveryTag,
+                    multiple: false,
+                    requeue: _options.RequeueOnHandlerError);
             }
             catch
             {
@@ -266,21 +267,19 @@ public sealed class RabbitMqMessageBus : IMessageBus
         }
     }
 
-    private void DeclareTopology(IModel channel)
+    private void DeclareTopology(IRabbitMqChannel channel)
     {
         channel.ExchangeDeclare(
             exchange: _options.ExchangeName,
-            type: ExchangeType.Direct,
-            durable: false,
-            autoDelete: false,
-            arguments: null);
+            type: _options.ExchangeType,
+            durable: _options.Durable,
+            autoDelete: _options.AutoDelete);
 
         channel.QueueDeclare(
             queue: _options.QueueName,
-            durable: false,
-            exclusive: false,
-            autoDelete: false,
-            arguments: null);
+            durable: _options.Durable,
+            exclusive: _options.Exclusive,
+            autoDelete: _options.AutoDelete);
 
         channel.QueueBind(
             queue: _options.QueueName,
@@ -355,6 +354,7 @@ public sealed class RabbitMqMessageBus : IMessageBus
         ArgumentException.ThrowIfNullOrWhiteSpace(options.ExchangeName);
         ArgumentException.ThrowIfNullOrWhiteSpace(options.QueueName);
         ArgumentException.ThrowIfNullOrWhiteSpace(options.RoutingKey);
+        ArgumentException.ThrowIfNullOrWhiteSpace(options.ExchangeType);
 
         if (options.Port <= 0 || options.Port > 65535)
         {
