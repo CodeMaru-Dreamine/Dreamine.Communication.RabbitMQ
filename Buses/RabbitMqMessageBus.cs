@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Dreamine.Communication.Abstractions.Enums;
 using Dreamine.Communication.Abstractions.Interfaces;
 using Dreamine.Communication.Abstractions.Models;
@@ -8,7 +8,7 @@ using Dreamine.Communication.RabbitMQ.Options;
 namespace Dreamine.Communication.RabbitMQ.Buses;
 
 /// <summary>
-/// \brief RabbitMQ 기반 메시지 버스입니다.
+/// RabbitMQ 기반 메시지 버스입니다.
 /// </summary>
 /// <remarks>
 /// IMessageBus 계약을 RabbitMQ exchange / queue / routing key 기반으로 구현합니다.
@@ -18,7 +18,7 @@ public sealed class RabbitMqMessageBus : IMessageBus
 {
     private readonly RabbitMqMessageBusOptions _options;
     private readonly IRabbitMqConnectionFactory _connectionFactory;
-    private readonly Dictionary<string, Func<MessageEnvelope, CancellationToken, Task>> _handlers = new();
+    private readonly Dictionary<string, List<Func<MessageEnvelope, CancellationToken, Task>>> _handlers = new();
     private readonly object _syncRoot = new();
 
     private IRabbitMqConnection? _connection;
@@ -26,7 +26,7 @@ public sealed class RabbitMqMessageBus : IMessageBus
     private string? _consumerTag;
 
     /// <summary>
-    /// \brief RabbitMqMessageBus 클래스의 새 인스턴스를 초기화합니다.
+    /// RabbitMqMessageBus 클래스의 새 인스턴스를 초기화합니다.
     /// </summary>
     /// <param name="options">RabbitMQ 메시지 버스 설정입니다.</param>
     public RabbitMqMessageBus(RabbitMqMessageBusOptions options)
@@ -35,7 +35,7 @@ public sealed class RabbitMqMessageBus : IMessageBus
     }
 
     /// <summary>
-    /// \brief RabbitMqMessageBus 클래스의 새 인스턴스를 초기화합니다.
+    /// RabbitMqMessageBus 클래스의 새 인스턴스를 초기화합니다.
     /// </summary>
     /// <param name="options">RabbitMQ 메시지 버스 설정입니다.</param>
     /// <param name="connectionFactory">RabbitMQ 연결 팩토리입니다.</param>
@@ -49,17 +49,17 @@ public sealed class RabbitMqMessageBus : IMessageBus
     }
 
     /// <summary>
-    /// \brief 메시지 버스의 현재 연결 상태를 가져옵니다.
+    /// 메시지 버스의 현재 연결 상태를 가져옵니다.
     /// </summary>
     public ConnectionState State { get; private set; } = ConnectionState.Disconnected;
 
     /// <summary>
-    /// \brief 메시지 버스 종류를 가져옵니다.
+    /// 메시지 버스 종류를 가져옵니다.
     /// </summary>
     public TransportKind Kind => TransportKind.RabbitMq;
 
     /// <summary>
-    /// \brief RabbitMQ 서버에 연결합니다.
+    /// RabbitMQ 서버에 연결합니다.
     /// </summary>
     /// <param name="cancellationToken">취소 토큰입니다.</param>
     public Task ConnectAsync(CancellationToken cancellationToken = default)
@@ -92,7 +92,7 @@ public sealed class RabbitMqMessageBus : IMessageBus
     }
 
     /// <summary>
-    /// \brief RabbitMQ로 메시지를 발행합니다.
+    /// RabbitMQ로 메시지를 발행합니다.
     /// </summary>
     /// <param name="message">발행할 메시지입니다.</param>
     /// <param name="cancellationToken">취소 토큰입니다.</param>
@@ -130,7 +130,7 @@ public sealed class RabbitMqMessageBus : IMessageBus
     }
 
     /// <summary>
-    /// \brief 지정한 라우트의 RabbitMQ 메시지를 구독합니다.
+    /// 지정한 라우트의 RabbitMQ 메시지를 구독합니다.
     /// </summary>
     /// <param name="route">구독할 라우트입니다.</param>
     /// <param name="handler">메시지 처리기입니다.</param>
@@ -151,7 +151,13 @@ public sealed class RabbitMqMessageBus : IMessageBus
 
         lock (_syncRoot)
         {
-            _handlers[route] = handler;
+            if (!_handlers.TryGetValue(route, out var handlers))
+            {
+                handlers = [];
+                _handlers[route] = handlers;
+            }
+
+            handlers.Add(handler);
         }
 
         _channel.QueueBind(
@@ -175,7 +181,7 @@ public sealed class RabbitMqMessageBus : IMessageBus
     }
 
     /// <summary>
-    /// \brief RabbitMQ 연결을 해제합니다.
+    /// RabbitMQ 연결을 해제합니다.
     /// </summary>
     /// <param name="cancellationToken">취소 토큰입니다.</param>
     public Task DisconnectAsync(CancellationToken cancellationToken = default)
@@ -198,7 +204,7 @@ public sealed class RabbitMqMessageBus : IMessageBus
     }
 
     /// <summary>
-    /// \brief RabbitMQ 메시지 버스 리소스를 비동기로 해제합니다.
+    /// RabbitMQ 메시지 버스 리소스를 비동기로 해제합니다.
     /// </summary>
     public async ValueTask DisposeAsync()
     {
@@ -228,24 +234,31 @@ public sealed class RabbitMqMessageBus : IMessageBus
                 ? delivery.RoutingKey
                 : message.Route;
 
-            Func<MessageEnvelope, CancellationToken, Task>? handler;
+            List<Func<MessageEnvelope, CancellationToken, Task>> handlers;
 
             lock (_syncRoot)
             {
-                if (!_handlers.TryGetValue(route, out handler) &&
-                    !_handlers.TryGetValue(delivery.RoutingKey, out handler))
+                if (!_handlers.TryGetValue(route, out var routeHandlers) &&
+                    !_handlers.TryGetValue(delivery.RoutingKey, out routeHandlers))
                 {
-                    handler = null;
+                    handlers = [];
+                }
+                else
+                {
+                    handlers = new List<Func<MessageEnvelope, CancellationToken, Task>>(routeHandlers);
                 }
             }
 
-            if (handler is null)
+            if (handlers.Count == 0)
             {
                 _channel.BasicAck(delivery.DeliveryTag, multiple: false);
                 return;
             }
 
-            await handler(message, cancellationToken).ConfigureAwait(false);
+            foreach (var handler in handlers)
+            {
+                await handler(message, cancellationToken).ConfigureAwait(false);
+            }
 
             _channel.BasicAck(delivery.DeliveryTag, multiple: false);
         }

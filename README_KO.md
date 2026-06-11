@@ -88,15 +88,15 @@ var bus = new RabbitMqMessageBus(
         VirtualHost = "/",
         UserName = "guest",
         Password = "guest",
-        ExchangeName = "dreamine.sample.exchange",
-        QueueName = "dreamine.sample.queue",
-        RoutingKey = "dreamine.sample.route"
+        ExchangeName = "dreamine.default.exchange",
+        QueueName = "dreamine.default.queue",
+        RoutingKey = "dreamine.default.route"
     });
 
 await bus.ConnectAsync();
 
 await bus.SubscribeAsync(
-    "dreamine.sample.route",
+    "dreamine.default.route",
     async (message, cancellationToken) =>
     {
         var text = System.Text.Encoding.UTF8.GetString(message.Payload);
@@ -108,7 +108,7 @@ await bus.PublishAsync(
     new MessageEnvelope
     {
         Name = "RabbitMQ.Publish",
-        Route = "dreamine.sample.route",
+        Route = "dreamine.default.route",
         Payload = System.Text.Encoding.UTF8.GetBytes("test"),
         Headers = new Dictionary<string, string>
         {
@@ -148,9 +148,9 @@ Port        5672
 VirtualHost /
 User        guest
 Password    guest
-Exchange    dreamine.sample.exchange
-Queue       dreamine.sample.queue
-RoutingKey  dreamine.sample.route
+Exchange    dreamine.default.exchange
+Queue       dreamine.default.queue
+RoutingKey  dreamine.default.route
 ```
 
 ## 검증된 시나리오
