@@ -46,8 +46,11 @@ public sealed class RabbitMqContractTests
     {
         var options = new RabbitMqMessageBusOptions { Port = 0 };
 
-        Assert.Throws<ArgumentOutOfRangeException>(() =>
+        var error = Assert.Throws<ArgumentOutOfRangeException>(() =>
             new RabbitMqMessageBus(options, new UnusedConnectionFactory()));
+
+        Assert.Equal("options", error.ParamName);
+        Assert.Equal(0, error.ActualValue);
     }
 
     [Fact]

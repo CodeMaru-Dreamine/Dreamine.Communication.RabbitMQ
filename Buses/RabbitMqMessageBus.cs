@@ -711,7 +711,10 @@ public sealed class RabbitMqMessageBus : IMessageBus
 
         if (options.Port <= 0 || options.Port > 65535)
         {
-            throw new ArgumentOutOfRangeException(nameof(options.Port));
+            throw new ArgumentOutOfRangeException(
+                nameof(options),
+                options.Port,
+                "RabbitMQ port must be between 1 and 65535.");
         }
     }
 }
