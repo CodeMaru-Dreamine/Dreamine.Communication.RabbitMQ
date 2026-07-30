@@ -1,5 +1,18 @@
 # Dreamine.Communication.RabbitMQ
 
+[![CI](https://github.com/CodeMaru-Dreamine/Dreamine.Communication.RabbitMQ/actions/workflows/ci.yml/badge.svg)](https://github.com/CodeMaru-Dreamine/Dreamine.Communication.RabbitMQ/actions/workflows/ci.yml)
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=CodeMaru-Dreamine_Dreamine.Communication.RabbitMQ&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=CodeMaru-Dreamine_Dreamine.Communication.RabbitMQ)
+[![Security](https://sonarcloud.io/api/project_badges/measure?project=CodeMaru-Dreamine_Dreamine.Communication.RabbitMQ&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=CodeMaru-Dreamine_Dreamine.Communication.RabbitMQ)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=CodeMaru-Dreamine_Dreamine.Communication.RabbitMQ&metric=coverage)](https://sonarcloud.io/component_measures?id=CodeMaru-Dreamine_Dreamine.Communication.RabbitMQ&metric=coverage)
+[![License](https://img.shields.io/github/license/CodeMaru-Dreamine/Dreamine.Communication.RabbitMQ?label=license)](LICENSE)
+[![.NET](https://img.shields.io/badge/.NET-8-512BD4)](https://dotnet.microsoft.com/)
+[![NuGet](https://img.shields.io/nuget/v/Dreamine.Communication.RabbitMQ?label=nuget)](https://www.nuget.org/packages/Dreamine.Communication.RabbitMQ)
+[![Downloads](https://img.shields.io/nuget/dt/Dreamine.Communication.RabbitMQ?label=downloads)](https://www.nuget.org/packages/Dreamine.Communication.RabbitMQ)
+[![Docs](https://img.shields.io/badge/Docs-dreamine.kr-2496ED)](https://dreamine.kr/)
+[![Guide](https://img.shields.io/badge/Guide-dreamine.kr-2496ED)](https://dreamine.kr/)
+[![Playground](https://img.shields.io/badge/Playground-dreamine.kr-6F42C1)](https://dreamine.kr/)
+[![Book](https://img.shields.io/badge/Book-Practical_MVVM_Architecture-black)](https://dreamine.kr/)
+
 `Dreamine.Communication.RabbitMQ`는 Dreamine Communication 패키지 제품군의 RabbitMQ 어댑터 패키지입니다.
 
 이 패키지는 Dreamine Communication의 공통 메시지 계약인 `MessageEnvelope`를 RabbitMQ의 Exchange, Queue, RoutingKey 기반 Publish/Subscribe 메시징 구조와 연결하는 `IMessageBus` 구현체를 제공합니다.
