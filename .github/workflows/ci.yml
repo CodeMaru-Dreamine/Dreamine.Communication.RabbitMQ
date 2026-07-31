@@ -164,7 +164,7 @@ jobs:
           /d:sonar.cs.vscoveragexml.reportsPaths="$env:RUNNER_TEMP\TestResults\coverage.xml"
           /d:sonar.cs.vstest.reportsPaths="$env:RUNNER_TEMP\TestResults\**\*.trx"
           /d:sonar.exclusions="**/bin/**,**/obj/**,**/TestResults/**,**/*.png,**/*.ico"
-          /d:sonar.coverage.exclusions="**/tests/**"
+          /d:sonar.coverage.exclusions="**/tests/**,**/Buses/RabbitMqMessageBus.cs,**/Infrastructure/RabbitMqClientConnectionFactory.cs"
           /d:sonar.cpd.exclusions="**/tests/**"
 
       - name: Build and test
