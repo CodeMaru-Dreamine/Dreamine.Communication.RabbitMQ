@@ -42,6 +42,13 @@ public sealed class RabbitMqContractTests
     }
 
     [Fact]
+    public void ExceptionSupportsDefaultAndMessageConstructors()
+    {
+        Assert.NotEmpty(new RabbitMqCommunicationException().Message);
+        Assert.Equal("failed", new RabbitMqCommunicationException("failed").Message);
+    }
+
+    [Fact]
     public void BusRejectsInvalidPort()
     {
         var options = new RabbitMqMessageBusOptions { Port = 0 };
